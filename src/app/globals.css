@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* MeuMoney — Azul Vibrante + Amarelo + Teal */
+    --background: 210 33% 98%;
+    --foreground: 233 30% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 233 30% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 233 30% 14%;
+    --primary: 216 82% 49%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 213 30% 95%;
+    --secondary-foreground: 216 82% 49%;
+    --muted: 213 20% 95%;
+    --muted-foreground: 215 14% 46%;
+    --accent: 213 30% 93%;
+    --accent-foreground: 216 82% 49%;
+    --destructive: 343 84% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 213 20% 90%;
+    --input: 213 20% 88%;
+    --ring: 216 82% 49%;
+    --radius: 0.75rem;
+
+    /* Sidebar — Azul vibrante */
+    --sidebar: 216 82% 49%;
+    --sidebar-dark: 216 82% 38%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-accent: 216 80% 56%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 216 80% 44%;
+    --sidebar-muted: 216 70% 60%;
+
+    /* Accent — Amarelo dourado */
+    --gold: 44 97% 49%;
+    --gold-foreground: 233 30% 14%;
+    --gold-light: 44 95% 92%;
+
+    /* Semanticos */
+    --success: 166 90% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 44 97% 49%;
+    --warning-foreground: 233 30% 14%;
+    --income: 166 90% 35%;
+    --income-foreground: 0 0% 100%;
+    --expense: 343 84% 55%;
+    --expense-foreground: 0 0% 100%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Scrollbar refinado */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(213 20% 82%);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(213 20% 70%);
+}
+
+/* Stagger animation */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+
+/* Sidebar gradient */
+.sidebar-gradient {
+  background: linear-gradient(
+    180deg,
+    hsl(216 82% 52%) 0%,
+    hsl(216 82% 42%) 100%
+  );
+}
