@@ -389,6 +389,7 @@ function MetricCard({ metric, delay }: { metric: Metric; delay: string }) {
 function CashflowChart({ data }: { data: CashflowPoint[] }) {
   const maxValue = Math.max(...data.map((point) => Math.max(point.income, point.expense)), 0);
   const hasData = data.some((point) => point.income > 0 || point.expense > 0);
+  const mobileData = data.filter((point) => point.income > 0 || point.expense > 0);
 
   if (!hasData) {
     return (
@@ -413,7 +414,47 @@ function CashflowChart({ data }: { data: CashflowPoint[] }) {
   const gridLines = [0.25, 0.5, 0.75, 1];
 
   return (
-    <div className="w-full overflow-hidden">
+    <>
+      <div className="space-y-3 sm:hidden">
+        {mobileData.map((point) => {
+          const incomeWidth = maxValue > 0 ? Math.max(4, (point.income / maxValue) * 100) : 0;
+          const expenseWidth = maxValue > 0 ? Math.max(4, (point.expense / maxValue) * 100) : 0;
+
+          return (
+            <div key={point.tooltipLabel} className="rounded-xl border border-border/60 bg-background p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-sm font-bold text-foreground">{point.tooltipLabel}</p>
+                <div className="text-right text-xs font-semibold text-muted-foreground">
+                  <p className="text-income">{formatCurrency(point.income)}</p>
+                  <p className="text-expense">{formatCurrency(point.expense)}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-muted-foreground">
+                    <span>Receitas</span>
+                    <span>{formatCurrency(point.income)}</span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-2.5 rounded-full bg-[#0fa388]" style={{ width: `${incomeWidth}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-muted-foreground">
+                    <span>Despesas</span>
+                    <span>{formatCurrency(point.expense)}</span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-2.5 rounded-full bg-[#ed315d]" style={{ width: `${expenseWidth}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden w-full overflow-hidden sm:block">
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de receitas e despesas" className="h-56 w-full">
         {gridLines.map((ratio) => {
           const y = baseline - chartHeight * ratio;
@@ -469,6 +510,7 @@ function CashflowChart({ data }: { data: CashflowPoint[] }) {
         })}
       </svg>
     </div>
+    </>
   );
 }
 
