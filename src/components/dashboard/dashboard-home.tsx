@@ -58,6 +58,19 @@ type Metric = {
   positiveWhen: "increase" | "decrease";
 };
 
+type CashflowPoint = {
+  label: string;
+  tooltipLabel: string;
+  income: number;
+  expense: number;
+};
+
+type CategoryBreakdownItem = {
+  category: string;
+  total: number;
+  percentage: number;
+};
+
 const categoryIconMap: Record<string, typeof ShoppingCart> = {
   alimentacao: Utensils,
   transporte: Car,
@@ -117,6 +130,15 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+function formatCompactCurrency(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 function formatPercent(value: number): string {
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(0)}%`;
@@ -138,6 +160,11 @@ function getTransactionPeriod(transaction: Transaction): Period | null {
     month: date.getMonth() + 1,
     year: date.getFullYear(),
   };
+}
+
+function getTransactionDate(transaction: Transaction): Date | null {
+  const date = new Date(`${transaction.date}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function isSamePeriod(a: Period, b: Period): boolean {
@@ -195,6 +222,96 @@ function filterByPeriod(transactions: Transaction[], period: Period | null): Tra
     const transactionPeriod = getTransactionPeriod(transaction);
     return transactionPeriod ? isSamePeriod(transactionPeriod, period) : false;
   });
+}
+
+function buildCashflowData(transactions: Transaction[], period: Period | null): CashflowPoint[] {
+  if (period) {
+    const days = daysInMonth(period);
+    const points = Array.from({ length: days }, (_, index) => {
+      const day = index + 1;
+      return {
+        label: String(day),
+        tooltipLabel: `${String(day).padStart(2, "0")}/${String(period.month).padStart(2, "0")}`,
+        income: 0,
+        expense: 0,
+      };
+    });
+
+    for (const transaction of transactions) {
+      const date = getTransactionDate(transaction);
+      if (!date) continue;
+
+      const point = points[date.getDate() - 1];
+      if (transaction.type === "income") {
+        point.income += Number(transaction.amount);
+      } else {
+        point.expense += Number(transaction.amount);
+      }
+    }
+
+    return points;
+  }
+
+  const points = new Map<string, CashflowPoint>();
+
+  for (const transaction of transactions) {
+    const date = getTransactionDate(transaction);
+    if (!date) continue;
+
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    const current = points.get(key) ?? {
+      label: monthNames[month - 1].slice(0, 3),
+      tooltipLabel: `${monthNames[month - 1]} ${year}`,
+      income: 0,
+      expense: 0,
+    };
+
+    if (transaction.type === "income") {
+      current.income += Number(transaction.amount);
+    } else {
+      current.expense += Number(transaction.amount);
+    }
+
+    points.set(key, current);
+  }
+
+  return Array.from(points.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, point]) => point);
+}
+
+function compactCategoryBreakdown(items: CategoryBreakdownItem[]): CategoryBreakdownItem[] {
+  if (items.length <= 6) return items;
+
+  const total = items.reduce((sum, item) => sum + item.total, 0);
+  const visible = items.slice(0, 5);
+  const restTotal = items.slice(5).reduce((sum, item) => sum + item.total, 0);
+
+  if (restTotal <= 0) return visible;
+
+  const otherIndex = visible.findIndex((item) => normalizeCategory(item.category) === "outros");
+  if (otherIndex >= 0) {
+    return visible.map((item, index) => {
+      if (index !== otherIndex) return item;
+      const nextTotal = item.total + restTotal;
+      return {
+        ...item,
+        total: nextTotal,
+        percentage: total > 0 ? (nextTotal / total) * 100 : 0,
+      };
+    });
+  }
+
+  return [
+    ...visible,
+    {
+      category: "Outros",
+      total: restTotal,
+      percentage: total > 0 ? (restTotal / total) * 100 : 0,
+    },
+  ];
 }
 
 function getVariation(current: number, previous: number | null): number | null {
@@ -260,6 +377,92 @@ function MetricCard({ metric, delay }: { metric: Metric; delay: string }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function CashflowChart({ data }: { data: CashflowPoint[] }) {
+  const maxValue = Math.max(...data.map((point) => Math.max(point.income, point.expense)), 0);
+  const hasData = data.some((point) => point.income > 0 || point.expense > 0);
+
+  if (!hasData) {
+    return (
+      <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 text-center">
+        <TrendingUp className="mb-3 h-8 w-8 text-muted-foreground" />
+        <p className="text-sm font-semibold text-foreground">Sem dados para o período</p>
+        <p className="mt-1 text-xs text-muted-foreground">As receitas e despesas aparecem aqui quando houver lançamentos.</p>
+      </div>
+    );
+  }
+
+  const width = 720;
+  const height = 260;
+  const paddingLeft = 44;
+  const paddingRight = 16;
+  const chartTop = 24;
+  const chartHeight = 176;
+  const baseline = chartTop + chartHeight;
+  const chartWidth = width - paddingLeft - paddingRight;
+  const groupWidth = chartWidth / data.length;
+  const barWidth = Math.max(3, Math.min(10, groupWidth * 0.28));
+  const gridLines = [0.25, 0.5, 0.75, 1];
+
+  return (
+    <div className="w-full overflow-hidden">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de receitas e despesas" className="h-72 w-full">
+        {gridLines.map((ratio) => {
+          const y = baseline - chartHeight * ratio;
+          const value = maxValue * ratio;
+
+          return (
+            <g key={ratio}>
+              <line x1={paddingLeft} x2={width - paddingRight} y1={y} y2={y} stroke="hsl(var(--border))" strokeDasharray="4 6" />
+              <text x={paddingLeft - 8} y={y + 4} textAnchor="end" className="fill-muted-foreground text-[10px] font-semibold">
+                {formatCompactCurrency(value)}
+              </text>
+            </g>
+          );
+        })}
+
+        <line x1={paddingLeft} x2={width - paddingRight} y1={baseline} y2={baseline} stroke="hsl(var(--border))" />
+
+        {data.map((point, index) => {
+          const center = paddingLeft + index * groupWidth + groupWidth / 2;
+          const incomeHeight = maxValue > 0 ? (point.income / maxValue) * chartHeight : 0;
+          const expenseHeight = maxValue > 0 ? (point.expense / maxValue) * chartHeight : 0;
+          const showLabel = data.length <= 12 || index === 0 || index === data.length - 1 || (index + 1) % 5 === 0;
+
+          return (
+            <g key={`${point.tooltipLabel}-${index}`}>
+              <rect
+                x={center - barWidth - 2}
+                y={baseline - incomeHeight}
+                width={barWidth}
+                height={incomeHeight}
+                rx={3}
+                fill="#0fa388"
+              >
+                <title>{`${point.tooltipLabel} - Receitas: ${formatCurrency(point.income)}`}</title>
+              </rect>
+              <rect
+                x={center + 2}
+                y={baseline - expenseHeight}
+                width={barWidth}
+                height={expenseHeight}
+                rx={3}
+                fill="#ed315d"
+              >
+                <title>{`${point.tooltipLabel} - Despesas: ${formatCurrency(point.expense)}`}</title>
+              </rect>
+              {showLabel && (
+                <text x={center} y={baseline + 18} textAnchor="middle" className="fill-muted-foreground text-[10px] font-semibold">
+                  {point.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
@@ -390,6 +593,15 @@ export function DashboardHome({ transactions }: { transactions: Transaction[] })
       .sort((a, b) => b.total - a.total);
   }, [filteredTransactions]);
 
+  const cashflowData = useMemo(
+    () => buildCashflowData(filteredTransactions, selectedPeriod),
+    [filteredTransactions, selectedPeriod]
+  );
+  const displayCategoryBreakdown = useMemo(
+    () => compactCategoryBreakdown(categoryBreakdown),
+    [categoryBreakdown]
+  );
+  const categoryMaxTotal = Math.max(...displayCategoryBreakdown.map((item) => item.total), 0);
   const recentTransactions = filteredTransactions.slice(0, 10);
 
   function handleYearChange(year: number) {
@@ -463,6 +675,34 @@ export function DashboardHome({ transactions }: { transactions: Transaction[] })
         ))}
       </div>
 
+      <Card className="shadow-card border-border/50 opacity-0 animate-fade-in" style={{ animationDelay: "400ms" }}>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-sm font-bold text-foreground uppercase tracking-wide">
+                Receitas x Despesas
+              </CardTitle>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                {selectedPeriod ? "Agrupado por dia" : "Agrupado por mês"}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-bold text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#0fa388]" />
+                Receitas
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#ed315d]" />
+                Despesas
+              </span>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <CashflowChart data={cashflowData} />
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="shadow-card border-border/50 opacity-0 animate-fade-in" style={{ animationDelay: "420ms" }}>
           <CardHeader className="pb-4">
@@ -470,44 +710,54 @@ export function DashboardHome({ transactions }: { transactions: Transaction[] })
               Despesas por Categoria
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {categoryBreakdown.length === 0 ? (
+          <CardContent className="space-y-5">
+            {displayCategoryBreakdown.length === 0 ? (
               <div className="text-center py-8">
                 <Package className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground font-medium">Nenhuma despesa neste período</p>
               </div>
             ) : (
-              categoryBreakdown.map((categoryItem) => {
+              <>
+                <div className="rounded-xl bg-muted/40 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Total em despesas</p>
+                  <p className="mt-1 text-2xl font-extrabold font-mono text-expense">{formatCurrency(totalExpenses)}</p>
+                </div>
+
+                <div className="space-y-4">
+                  {displayCategoryBreakdown.map((categoryItem, index) => {
                 const categoryKey = normalizeCategory(categoryItem.category);
                 const Icon = categoryIconMap[categoryKey] ?? Package;
                 const color = categoryColorMap[categoryKey] ?? "#6b7280";
+                const width = categoryMaxTotal > 0 ? (categoryItem.total / categoryMaxTotal) * 100 : 0;
 
                 return (
-                  <div key={categoryItem.category} className="group/cat">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="flex items-center gap-2.5">
+                  <div key={`${categoryItem.category}-${index}`} className="group/cat">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="flex min-w-0 items-center gap-2.5">
                         <div
-                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-200 group-hover/cat:scale-110"
+                          className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-transform duration-200 group-hover/cat:scale-110"
                           style={{ backgroundColor: `${color}15` }}
                         >
                           <Icon className="w-4 h-4" style={{ color }} />
                         </div>
-                        <span className="text-sm font-semibold text-foreground">{categoryItem.category}</span>
+                        <span className="truncate text-sm font-semibold text-foreground">{categoryItem.category}</span>
                       </span>
-                      <div className="text-right">
-                        <span className="text-sm font-bold font-mono text-foreground">{formatCurrency(categoryItem.total)}</span>
-                        <span className="text-[10px] text-muted-foreground ml-1.5 font-semibold">{categoryItem.percentage.toFixed(0)}%</span>
+                      <div className="shrink-0 text-right">
+                        <span className="block text-sm font-bold font-mono text-foreground">{formatCurrency(categoryItem.total)}</span>
+                        <span className="text-[10px] text-muted-foreground font-semibold">{categoryItem.percentage.toFixed(0)}%</span>
                       </div>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
                       <div
-                        className="h-2 rounded-full transition-all duration-700 ease-out"
-                        style={{ width: `${categoryItem.percentage}%`, background: `linear-gradient(90deg, ${color}, ${color}cc)` }}
+                        className="h-2.5 rounded-full transition-all duration-700 ease-out"
+                        style={{ width: `${width}%`, background: `linear-gradient(90deg, ${color}, ${color}cc)` }}
                       />
                     </div>
                   </div>
                 );
-              })
+              })}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
