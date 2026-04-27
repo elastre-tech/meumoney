@@ -236,17 +236,23 @@ function buildCashflowData(transactions: Transaction[], period: Period | null): 
         expense: 0,
       };
     });
+    const relevantDays = new Set<number>();
 
     for (const transaction of transactions) {
       const date = getTransactionDate(transaction);
       if (!date) continue;
 
+      relevantDays.add(date.getDate());
       const point = points[date.getDate() - 1];
       if (transaction.type === "income") {
         point.income += Number(transaction.amount);
       } else {
         point.expense += Number(transaction.amount);
       }
+    }
+
+    if (relevantDays.size > 0 && relevantDays.size <= 14) {
+      return points.filter((point) => point.income > 0 || point.expense > 0);
     }
 
     return points;
@@ -386,7 +392,7 @@ function CashflowChart({ data }: { data: CashflowPoint[] }) {
 
   if (!hasData) {
     return (
-      <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 text-center">
+      <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 text-center">
         <TrendingUp className="mb-3 h-8 w-8 text-muted-foreground" />
         <p className="text-sm font-semibold text-foreground">Sem dados para o período</p>
         <p className="mt-1 text-xs text-muted-foreground">As receitas e despesas aparecem aqui quando houver lançamentos.</p>
@@ -395,20 +401,20 @@ function CashflowChart({ data }: { data: CashflowPoint[] }) {
   }
 
   const width = 720;
-  const height = 260;
-  const paddingLeft = 44;
-  const paddingRight = 16;
-  const chartTop = 24;
-  const chartHeight = 176;
+  const height = 220;
+  const paddingLeft = 42;
+  const paddingRight = 12;
+  const chartTop = 14;
+  const chartHeight = 148;
   const baseline = chartTop + chartHeight;
   const chartWidth = width - paddingLeft - paddingRight;
   const groupWidth = chartWidth / data.length;
-  const barWidth = Math.max(3, Math.min(10, groupWidth * 0.28));
+  const barWidth = Math.max(5, Math.min(18, groupWidth * 0.36));
   const gridLines = [0.25, 0.5, 0.75, 1];
 
   return (
     <div className="w-full overflow-hidden">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de receitas e despesas" className="h-72 w-full">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de receitas e despesas" className="h-56 w-full">
         {gridLines.map((ratio) => {
           const y = baseline - chartHeight * ratio;
           const value = maxValue * ratio;
@@ -454,7 +460,7 @@ function CashflowChart({ data }: { data: CashflowPoint[] }) {
                 <title>{`${point.tooltipLabel} - Despesas: ${formatCurrency(point.expense)}`}</title>
               </rect>
               {showLabel && (
-                <text x={center} y={baseline + 18} textAnchor="middle" className="fill-muted-foreground text-[10px] font-semibold">
+                <text x={center} y={baseline + 17} textAnchor="middle" className="fill-muted-foreground text-[10px] font-semibold">
                   {point.label}
                 </text>
               )}
@@ -676,7 +682,7 @@ export function DashboardHome({ transactions }: { transactions: Transaction[] })
       </div>
 
       <Card className="shadow-card border-border/50 opacity-0 animate-fade-in" style={{ animationDelay: "400ms" }}>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-sm font-bold text-foreground uppercase tracking-wide">
@@ -698,7 +704,7 @@ export function DashboardHome({ transactions }: { transactions: Transaction[] })
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4 pt-0 sm:px-6">
           <CashflowChart data={cashflowData} />
         </CardContent>
       </Card>
