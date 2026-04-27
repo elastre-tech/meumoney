@@ -630,6 +630,9 @@ export function DashboardHome({ transactions }: { transactions: Transaction[] })
           <p className="mt-1 text-sm font-medium text-muted-foreground">
             {formatPeriodLabel(selectedPeriod)}
           </p>
+          <p className="mt-1 text-xs font-semibold text-muted-foreground/80">
+            {selectedPeriod ? "Filtrando pelo mês selecionado." : "Mostrando todos os meses e anos registrados."}
+          </p>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -731,37 +734,37 @@ export function DashboardHome({ transactions }: { transactions: Transaction[] })
 
                 <div className="space-y-4">
                   {displayCategoryBreakdown.map((categoryItem, index) => {
-                const categoryKey = normalizeCategory(categoryItem.category);
-                const Icon = categoryIconMap[categoryKey] ?? Package;
-                const color = categoryColorMap[categoryKey] ?? "#6b7280";
-                const width = categoryMaxTotal > 0 ? (categoryItem.total / categoryMaxTotal) * 100 : 0;
+                    const categoryKey = normalizeCategory(categoryItem.category);
+                    const Icon = categoryIconMap[categoryKey] ?? Package;
+                    const color = categoryColorMap[categoryKey] ?? "#6b7280";
+                    const width = categoryMaxTotal > 0 ? (categoryItem.total / categoryMaxTotal) * 100 : 0;
 
-                return (
-                  <div key={`${categoryItem.category}-${index}`} className="group/cat">
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        <div
-                          className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-transform duration-200 group-hover/cat:scale-110"
-                          style={{ backgroundColor: `${color}15` }}
-                        >
-                          <Icon className="w-4 h-4" style={{ color }} />
+                    return (
+                      <div key={`${categoryItem.category}-${index}`} className="group/cat">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            <div
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover/cat:scale-110"
+                              style={{ backgroundColor: `${color}15` }}
+                            >
+                              <Icon className="h-4 w-4" style={{ color }} />
+                            </div>
+                            <span className="truncate text-sm font-semibold text-foreground">{categoryItem.category}</span>
+                          </span>
+                          <div className="shrink-0 text-right">
+                            <span className="block text-sm font-bold font-mono text-foreground">{formatCurrency(categoryItem.total)}</span>
+                            <span className="text-[10px] font-semibold text-muted-foreground">{categoryItem.percentage.toFixed(0)}%</span>
+                          </div>
                         </div>
-                        <span className="truncate text-sm font-semibold text-foreground">{categoryItem.category}</span>
-                      </span>
-                      <div className="shrink-0 text-right">
-                        <span className="block text-sm font-bold font-mono text-foreground">{formatCurrency(categoryItem.total)}</span>
-                        <span className="text-[10px] text-muted-foreground font-semibold">{categoryItem.percentage.toFixed(0)}%</span>
+                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-2.5 rounded-full transition-all duration-700 ease-out"
+                            style={{ width: `${width}%`, background: `linear-gradient(90deg, ${color}, ${color}cc)` }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
-                      <div
-                        className="h-2.5 rounded-full transition-all duration-700 ease-out"
-                        style={{ width: `${width}%`, background: `linear-gradient(90deg, ${color}, ${color}cc)` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
                 </div>
               </>
             )}
