@@ -56,6 +56,48 @@ export function ocrConfirmationMessage(
   ].join('\n')
 }
 
+export function batchConfirmationMessage(
+  items: { amount: number; category: string; description?: string | null }[],
+  userName: string | null = null
+): string {
+  const greeting = userName ? `Anotado, ${userName}!` : 'Anotado!'
+  const total = items.reduce((sum, i) => sum + i.amount, 0)
+  const lines = items.map((i) => {
+    const desc = i.description ? ` — ${i.description}` : ''
+    return `• ${formatCurrency(i.amount)} (${i.category})${desc}`
+  })
+  return [
+    `📸 ${greeting}`,
+    '',
+    `✅ Salvei ${items.length} transações (total ${formatCurrency(total)}):`,
+    ...lines,
+    '',
+    'Errou algo? Toque em um botão abaixo.',
+  ].join('\n')
+}
+
+export function batchSummaryMessage(
+  total: number,
+  count: number,
+  categoryBreakdown: { category: string; count: number }[],
+  userName: string | null = null
+): string {
+  const greeting = userName ? `Anotado, ${userName}!` : 'Anotado!'
+  const top = [...categoryBreakdown]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+    .map((c) => `${c.category} (${c.count})`)
+    .join(', ')
+  return [
+    `📸 ${greeting}`,
+    '',
+    `✅ Salvei ${count} transações, total ${formatCurrency(total)}.`,
+    `🏆 Top categorias: ${top}`,
+    '',
+    'Errou algo? Toque em um botão abaixo.',
+  ].join('\n')
+}
+
 export function onboardingStep0Message(): string {
   return [
     `👋 Olá! Eu sou o *MeuMoney*, seu assistente financeiro no WhatsApp.`,
