@@ -106,6 +106,54 @@ export async function handleCancelar(to: string, userId: string): Promise<void> 
     `❌ ${label} cancelada: ${formatCurrency(Number(last.amount))} — ${last.description ?? 'sem descrição'}`)
 }
 
+/**
+ * Cancel one or more specific transactions by id, scoped to the user.
+ * Used by the ID-aware Cancelar button so users can cancel an older transaction
+ * (not just the most recent one).
+ */
+export async function handleCancelarById(to: string, userId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) {
+    await handleCancelar(to, userId)
+    return
+  }
+
+  const supabase = createAdminClient()
+  const { data: txs } = await supabase
+    .from('transactions')
+    .select('id, description, amount, type')
+    .eq('user_id', userId)
+    .in('id', ids)
+
+  if (!txs || txs.length === 0) {
+    await sendWhatsAppMessage(to, 'Essa transação já foi cancelada ou não existe mais.')
+    return
+  }
+
+  const { error } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('user_id', userId)
+    .in('id', ids)
+
+  if (error) {
+    console.error('[Cancelar by id] Erro ao deletar transações:', error)
+    await sendWhatsAppMessage(to, ERROR_MESSAGES.GENERIC_ERROR)
+    return
+  }
+
+  if (txs.length === 1) {
+    const t = txs[0]
+    const label = t.type === 'income' ? 'Receita' : 'Despesa'
+    await sendWhatsAppMessage(to,
+      `❌ ${label} cancelada: ${formatCurrency(Number(t.amount))} — ${t.description ?? 'sem descrição'}`)
+    return
+  }
+
+  const total = txs.reduce((s, t) => s + Number(t.amount), 0)
+  await sendWhatsAppMessage(to,
+    `❌ Cancelei ${txs.length} transações (total ${formatCurrency(total)}).`)
+}
+
 export async function handleEditar(to: string, userId: string): Promise<void> {
   const supabase = createAdminClient()
   const { data: last } = await supabase
@@ -128,6 +176,54 @@ export async function handleEditar(to: string, userId: string): Promise<void> {
   if (!sent) {
     console.error(`[FALHA ENVIO] Edição não entregue para ${maskId(to)}`)
   }
+}
+
+/**
+ * Edit (cancel + ask user to resend) one or more specific transactions by id, scoped to the user.
+ */
+export async function handleEditarById(to: string, userId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) {
+    await handleEditar(to, userId)
+    return
+  }
+
+  const supabase = createAdminClient()
+  const { data: txs } = await supabase
+    .from('transactions')
+    .select('id, description, amount')
+    .eq('user_id', userId)
+    .in('id', ids)
+
+  if (!txs || txs.length === 0) {
+    await sendWhatsAppMessage(to, 'Essa transação já foi cancelada ou não existe mais.')
+    return
+  }
+
+  const { error } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('user_id', userId)
+    .in('id', ids)
+
+  if (error) {
+    console.error('[Editar by id] Erro ao deletar transações:', error)
+    await sendWhatsAppMessage(to, ERROR_MESSAGES.GENERIC_ERROR)
+    return
+  }
+
+  if (txs.length === 1) {
+    const t = txs[0]
+    const sent = await sendWhatsAppMessage(to,
+      `✏️ Cancelei: ${formatCurrency(Number(t.amount))} — ${t.description ?? 'sem descrição'}. Manda de novo com os dados certos!`)
+    if (!sent) {
+      console.error(`[FALHA ENVIO] Edição não entregue para ${maskId(to)}`)
+    }
+    return
+  }
+
+  const total = txs.reduce((s, t) => s + Number(t.amount), 0)
+  await sendWhatsAppMessage(to,
+    `✏️ Cancelei ${txs.length} transações (total ${formatCurrency(total)}). Manda de novo com os dados certos!`)
 }
 
 export async function handleExportar(to: string, userId: string): Promise<void> {

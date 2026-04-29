@@ -12,11 +12,52 @@ import {
   handleResumo,
   handleCategorias,
   handleCancelar,
+  handleCancelarById,
   handleEditar,
+  handleEditarById,
   handleExportar,
   handleExcluirDados,
   handleReportar,
 } from './commands'
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isLastBatchPending(p: unknown): p is { kind: 'last_batch'; ids: string[] } {
+  return !!p
+    && typeof p === 'object'
+    && (p as { kind?: unknown }).kind === 'last_batch'
+    && Array.isArray((p as { ids?: unknown }).ids)
+}
+
+/**
+ * Resolve the transaction ids encoded in a button payload.
+ * - "_pending" → read pending_transaction last_batch and clear it.
+ * - "uuid1,uuid2,..." → split and validate each as a UUID.
+ */
+async function resolveActionIds(
+  payload: string,
+  userId: string,
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<string[]> {
+  if (payload === '_pending') {
+    const { data: user } = await supabase
+      .from('users')
+      .select('pending_transaction')
+      .eq('id', userId)
+      .single()
+    const pending = user?.pending_transaction
+    if (isLastBatchPending(pending)) {
+      await supabase.from('users').update({ pending_transaction: null }).eq('id', userId)
+      return pending.ids.filter((id): id is string => typeof id === 'string' && UUID_REGEX.test(id))
+    }
+    return []
+  }
+
+  return payload
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => UUID_REGEX.test(s))
+}
 
 export async function handleConfirmation(to: string): Promise<void> {
   await sendWhatsAppMessage(to, `👍`)
@@ -37,6 +78,22 @@ export async function handleText(
     return
   }
 
+  // ID-aware buttons must dispatch before the missing-amount block, so the
+  // pending_transaction last_batch isn't accidentally cleared first.
+  const cancelMatch = text.match(/^__btn_cancel:(.+)__$/)
+  if (cancelMatch) {
+    const ids = await resolveActionIds(cancelMatch[1], userId, supabase)
+    await handleCancelarById(message.from, userId, ids)
+    return
+  }
+
+  const editMatch = text.match(/^__btn_edit:(.+)__$/)
+  if (editMatch) {
+    const ids = await resolveActionIds(editMatch[1], userId, supabase)
+    await handleEditarById(message.from, userId, ids)
+    return
+  }
+
   if (lower === 'editar') {
     await handleEditar(message.from, userId)
     return
@@ -47,7 +104,9 @@ export async function handleText(
     return
   }
 
-  if (pendingTransaction && typeof pendingTransaction === 'object') {
+  // Skip the missing-amount flow if pending holds last_batch ids — those belong
+  // to a batch confirmation still waiting on a button tap, not to this text message.
+  if (pendingTransaction && typeof pendingTransaction === 'object' && !isLastBatchPending(pendingTransaction)) {
     const pending = pendingTransaction as { type: string; description: string; category: string; source: string; date?: string }
     const processedReply = convertTextToNumber(text)
     const amountMatch = processedReply.match(/^R?\$?\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)\s*$/)

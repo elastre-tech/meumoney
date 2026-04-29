@@ -12,8 +12,21 @@ export interface ParsedMessage {
  * Convert a WhatsApp interactive button reply id into a text equivalent
  * that the router already knows how to handle. Unknown ids are passed
  * through so they don't get silently dropped.
+ *
+ * ID-aware action buttons (cancel_transaction:<payload>, edit_transaction:<payload>)
+ * become internal tokens (__btn_cancel:<payload>__ / __btn_edit:<payload>__) that
+ * the text handler dispatches before any other rule.
  */
 function buttonIdToText(id: string | undefined): string {
+  if (!id) return ''
+
+  if (id.startsWith('cancel_transaction:')) {
+    return `__btn_cancel:${id.slice('cancel_transaction:'.length)}__`
+  }
+  if (id.startsWith('edit_transaction:')) {
+    return `__btn_edit:${id.slice('edit_transaction:'.length)}__`
+  }
+
   switch (id) {
     case 'confirm_ok':
       return '__btn_confirm_ok__'
@@ -26,7 +39,7 @@ function buttonIdToText(id: string | undefined): string {
     case 'lgpd_reject':
       return '__btn_lgpd_reject__'
     default:
-      return id ?? ''
+      return id
   }
 }
 

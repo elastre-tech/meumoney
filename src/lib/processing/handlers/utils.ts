@@ -17,6 +17,28 @@ export function maskId(id: string): string {
   return id.length > 4 ? `***${id.slice(-4)}` : id
 }
 
+// WhatsApp Cloud API: button reply id is capped at 256 chars.
+const MAX_BUTTON_ID_LENGTH = 256
+export const BUTTON_PENDING_SENTINEL = '_pending'
+
+export type TransactionActionPrefix = 'cancel_transaction' | 'edit_transaction'
+
+/**
+ * Build a button reply id that carries transaction ids inline ("cancel_transaction:uuid1,uuid2"),
+ * falling back to a sentinel ("cancel_transaction:_pending") when the inline form would exceed the
+ * WhatsApp 256-char button id limit. When the sentinel is used, the caller MUST persist the ids
+ * elsewhere (see pending_transaction last_batch shape).
+ */
+export function buildActionButtonId(
+  prefix: TransactionActionPrefix,
+  ids: string[]
+): { id: string; usesPendingFallback: boolean } {
+  if (ids.length === 0) return { id: prefix, usesPendingFallback: false }
+  const inline = `${prefix}:${ids.join(',')}`
+  if (inline.length <= MAX_BUTTON_ID_LENGTH) return { id: inline, usesPendingFallback: false }
+  return { id: `${prefix}:${BUTTON_PENDING_SENTINEL}`, usesPendingFallback: true }
+}
+
 export async function saveAndConfirmTransaction(
   to: string,
   userId: string,
@@ -33,7 +55,7 @@ export async function saveAndConfirmTransaction(
     .limit(1)
     .single()
 
-  const { error } = await supabase.from('transactions').insert({
+  const { data: inserted, error } = await supabase.from('transactions').insert({
     user_id: userId,
     type: data.type,
     amount: data.amount,
@@ -42,7 +64,7 @@ export async function saveAndConfirmTransaction(
     source: data.source,
     date: data.date ?? new Date().toISOString().split('T')[0],
     ai_confidence: data.confidence,
-  })
+  }).select('id').single()
 
   const transactionDate = data.date ?? new Date().toISOString().split('T')[0]
   const isToday = transactionDate === new Date().toISOString().split('T')[0]
@@ -56,6 +78,10 @@ export async function saveAndConfirmTransaction(
     return
   }
 
+  const insertedIds = inserted?.id ? [inserted.id] : []
+  const editBtn = buildActionButtonId('edit_transaction', insertedIds)
+  const cancelBtn = buildActionButtonId('cancel_transaction', insertedIds)
+
   const confirmation = confirmationMessage(
     data.type,
     data.amount,
@@ -67,8 +93,8 @@ export async function saveAndConfirmTransaction(
     data.source
   )
   const sentConfirm = await sendInteractiveButtons(to, confirmation, [
-    { id: 'edit_transaction', title: 'Editar' },
-    { id: 'cancel_transaction', title: 'Cancelar' },
+    { id: editBtn.id, title: 'Editar' },
+    { id: cancelBtn.id, title: 'Cancelar' },
   ])
   if (!sentConfirm) {
     console.error(`[FALHA ENVIO] Confirmação de transação não entregue para ${maskId(to)}`)

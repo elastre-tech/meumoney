@@ -11,7 +11,7 @@ import { extractReceiptData, type OCRTransaction } from '@/lib/ai/ocr'
 import { classifyMessage } from '@/lib/ai/classify'
 import { normalizeText } from '@/lib/utils/categories'
 import { ERROR_MESSAGES } from '@/lib/utils/constants'
-import { maskId } from './utils'
+import { maskId, buildActionButtonId } from './utils'
 
 interface ResolvedTransaction {
   amount: number
@@ -130,12 +130,17 @@ export async function handleImage(
     ai_confidence: ocrResult.confidence,
   }))
 
-  const { error: insertError } = await supabase.from('transactions').insert(insertRows)
+  const { data: insertedRows, error: insertError } = await supabase
+    .from('transactions')
+    .insert(insertRows)
+    .select('id')
   if (insertError) {
     console.error(`[FALHA INSERT] OCR batch para ${maskId(message.from)}:`, insertError)
     await sendWhatsAppMessage(message.from, ERROR_MESSAGES.GENERIC_ERROR)
     return
   }
+
+  const insertedIds = (insertedRows ?? []).map((r) => r.id).filter((id): id is string => typeof id === 'string')
 
   const warningPrefix = ocrResult.confidence < LOW_CONFIDENCE_THRESHOLD ? LOW_CONFIDENCE_WARNING : ''
   const count = resolved.length
@@ -169,10 +174,20 @@ export async function handleImage(
     body = batchSummaryMessage(total, count, breakdown, userName)
   }
 
+  const editBtn = buildActionButtonId('edit_transaction', insertedIds)
+  const cancelBtn = buildActionButtonId('cancel_transaction', insertedIds)
+  if (editBtn.usesPendingFallback || cancelBtn.usesPendingFallback) {
+    // Batch too large to fit ids inline in the 256-char button payload — stash them.
+    await supabase
+      .from('users')
+      .update({ pending_transaction: { kind: 'last_batch', ids: insertedIds } })
+      .eq('id', userId)
+  }
+
   const confirmation = warningPrefix + body
   const sent = await sendInteractiveButtons(message.from, confirmation, [
-    { id: 'edit_transaction', title: 'Editar' },
-    { id: 'cancel_transaction', title: 'Cancelar' },
+    { id: editBtn.id, title: 'Editar' },
+    { id: cancelBtn.id, title: 'Cancelar' },
   ])
   if (!sent) {
     console.error(`[FALHA ENVIO] Confirmação OCR não entregue para ${maskId(message.from)}`)
