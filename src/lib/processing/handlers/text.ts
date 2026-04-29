@@ -19,6 +19,7 @@ import {
   handleExportar,
   handleExcluirDados,
   handleReportar,
+  handleBugReportDetail,
 } from './commands'
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -144,6 +145,29 @@ function isLastBatchPending(p: unknown): p is { kind: 'last_batch'; ids: string[
     && Array.isArray((p as { ids?: unknown }).ids)
 }
 
+const PENDING_REPORT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+function isPendingReport(p: unknown): p is { kind: 'pending_report'; report_id: string; created_at: string } {
+  if (!p || typeof p !== 'object') return false
+  const obj = p as { kind?: unknown; report_id?: unknown; created_at?: unknown }
+  if (obj.kind !== 'pending_report') return false
+  if (typeof obj.report_id !== 'string' || typeof obj.created_at !== 'string') return false
+  const age = Date.now() - new Date(obj.created_at).getTime()
+  if (!Number.isFinite(age) || age < 0 || age > PENDING_REPORT_MAX_AGE_MS) return false
+  return true
+}
+
+// Comandos exatos que NUNCA viram detalhe de bug — se a usuária digitar um
+// destes em estado pending_report, o pending é limpo e o comando é processado normal.
+const PENDING_REPORT_SKIP_COMMANDS = new Set<string>([
+  'editar', 'cancelar', 'ajuda', 'menu', 'duvida', 'duvidas',
+  'tutorial', 'tutoriais', 'reportar', 'bug', 'problema',
+  'conta', 'minha conta', 'painel', 'dashboard',
+  'relatorio', 'relatório', 'resumo', 'categorias',
+  'exportar', 'excluir meus dados',
+  'confirmar exclusao', 'confirmar exclusão',
+])
+
 /**
  * Resolve the transaction ids encoded in a button payload.
  * - "_pending" → read pending_transaction last_batch and clear it.
@@ -209,6 +233,17 @@ export async function handleText(
     return
   }
 
+  // Pending bug report? A próxima mensagem que NÃO for comando vira detalhe do report.
+  if (isPendingReport(pendingTransaction)) {
+    if (PENDING_REPORT_SKIP_COMMANDS.has(lower)) {
+      // Usuária mudou de assunto — limpa pending e deixa o handler do comando agir.
+      await supabase.from('users').update({ pending_transaction: null }).eq('id', userId)
+    } else {
+      await handleBugReportDetail(message.from, userId, userName, text, pendingTransaction.report_id)
+      return
+    }
+  }
+
   if (lower === 'editar') {
     await handleEditar(message.from, userId)
     return
@@ -221,7 +256,7 @@ export async function handleText(
 
   // Skip the missing-amount flow if pending holds last_batch ids — those belong
   // to a batch confirmation still waiting on a button tap, not to this text message.
-  if (pendingTransaction && typeof pendingTransaction === 'object' && !isLastBatchPending(pendingTransaction)) {
+  if (pendingTransaction && typeof pendingTransaction === 'object' && !isLastBatchPending(pendingTransaction) && !isPendingReport(pendingTransaction)) {
     const pending = pendingTransaction as { type: string; description: string; category: string; source: string; date?: string }
     const processedReply = convertTextToNumber(text)
     const amountMatch = processedReply.match(/^R?\$?\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)\s*$/)

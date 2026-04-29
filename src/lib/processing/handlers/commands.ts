@@ -354,16 +354,34 @@ export async function handleReportar(to: string, userId: string, userName: strin
     .order('created_at', { ascending: false })
     .limit(3)
 
-  await supabase.from('reports').insert({
-    user_id: userId,
-    type: 'bug',
-    status: 'open',
-    context: {
-      user_name: userName,
-      recent_messages: recentMsgs ?? [],
-      reported_at: new Date().toISOString(),
-    },
-  })
+  const { data: inserted } = await supabase
+    .from('reports')
+    .insert({
+      user_id: userId,
+      type: 'bug',
+      status: 'open',
+      context: {
+        user_name: userName,
+        recent_messages: recentMsgs ?? [],
+        reported_at: new Date().toISOString(),
+      },
+    })
+    .select('id')
+    .single()
+
+  if (inserted?.id) {
+    // Marca pending_report — a próxima mensagem (não-comando) vira detalhe do report.
+    await supabase
+      .from('users')
+      .update({
+        pending_transaction: {
+          kind: 'pending_report',
+          report_id: inserted.id,
+          created_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', userId)
+  }
 
   await notifySupportOfBugReport({ from: to, userName, recentMsgs: recentMsgs ?? [] })
 
@@ -371,6 +389,76 @@ export async function handleReportar(to: string, userId: string, userName: strin
     `🐛 Problema registrado! Nossa equipe vai analisar. Se quiser detalhar, mande a próxima mensagem descrevendo o que houve.`)
   if (!sent) {
     console.error(`[FALHA ENVIO] Confirmação de report não entregue para ${maskId(to)}`)
+  }
+}
+
+/**
+ * Capture a free-form message as the user's detail for a previously opened report.
+ * Updates the existing report's JSON context, notifies support with the detail, and
+ * confirms back to the user.
+ */
+export async function handleBugReportDetail(
+  to: string,
+  userId: string,
+  userName: string | null,
+  detail: string,
+  reportId: string
+): Promise<void> {
+  const supabase = createAdminClient()
+
+  const { data: existing } = await supabase
+    .from('reports')
+    .select('context')
+    .eq('id', reportId)
+    .eq('user_id', userId)
+    .single()
+
+  const baseContext = (existing?.context && typeof existing.context === 'object')
+    ? (existing.context as Record<string, unknown>)
+    : {}
+
+  await supabase
+    .from('reports')
+    .update({
+      context: {
+        ...baseContext,
+        user_detail: detail,
+        detail_at: new Date().toISOString(),
+      },
+    })
+    .eq('id', reportId)
+    .eq('user_id', userId)
+
+  // Limpa o pending_report do usuário.
+  await supabase.from('users').update({ pending_transaction: null }).eq('id', userId)
+
+  await notifyDetailToSupport({ from: to, userName, detail })
+
+  const sent = await sendWhatsAppMessage(to,
+    '✅ Anotado, valeu pelo detalhe! Já mandei pra equipe analisar.')
+  if (!sent) {
+    console.error(`[FALHA ENVIO] Confirmação de detalhe não entregue para ${maskId(to)}`)
+  }
+}
+
+async function notifyDetailToSupport(args: {
+  from: string
+  userName: string | null
+  detail: string
+}): Promise<void> {
+  const notifyTo = process.env.BUG_REPORT_NOTIFY_TO
+  if (!notifyTo) return
+  const who = args.userName ? `${args.userName} (${args.from})` : args.from
+  const body = [
+    '📝 Detalhe do bug report',
+    '',
+    `De: ${who}`,
+    '',
+    `"${args.detail.slice(0, 1000)}"`,
+  ].join('\n')
+  const sent = await sendWhatsAppMessage(notifyTo, body)
+  if (!sent) {
+    console.error(`[BUG REPORT DETALHE] Falha ao notificar suporte ${maskId(notifyTo)} — ver tabela reports`)
   }
 }
 
