@@ -45,6 +45,25 @@ const CARTAO_INQUIRY_PHRASES = new Set<string>([
   'o cartao',
 ])
 
+// Frases já normalizadas (lowercase + sem acentos) — normalizeText remove acentos.
+const GREETING_PHRASES = new Set<string>([
+  'oi', 'oie', 'oii', 'oiii', 'ola', 'ole',
+  'bom dia', 'boa tarde', 'boa noite',
+  'tudo bem', 'tudo bom', 'tudo certo', 'tudo joia',
+  'e ai', 'eai', 'salve', 'opa', 'opaa',
+  'hi', 'hello', 'hey',
+])
+
+/**
+ * Detect a generic greeting that has no transactional content. Match must be
+ * EXACT against the normalized text — "oi tudo bem" or "oi gastei 50" don't match.
+ */
+export function detectGreeting(text: string): boolean {
+  const normalized = normalizeText(text).trim()
+  if (!normalized) return false
+  return GREETING_PHRASES.has(normalized)
+}
+
 /**
  * Detect generic inquiries about cartão/fatura with no transactional context
  * (no value, no description). Match must be EXACT against the normalized text —
@@ -218,6 +237,13 @@ export async function handleText(
   if (cartaoInquiry === 'fatura') {
     await sendWhatsAppMessage(message.from,
       "💳 Pra registrar a fatura, me manda o valor assim: \"paguei 1500 de fatura\". Se preferir item por item, manda cada um: \"gastei 50 no mercado e paguei no cartão\".")
+    return
+  }
+
+  if (detectGreeting(text)) {
+    const hi = userName ? `Oi, ${userName}! 👋` : 'Oi! 👋'
+    await sendWhatsAppMessage(message.from,
+      `${hi} Pra registrar, manda algo tipo "gastei 45 no mercado" ou "recebi 3500 de salário". Manda *ajuda* pra ver tudo que dá pra fazer.`)
     return
   }
 
