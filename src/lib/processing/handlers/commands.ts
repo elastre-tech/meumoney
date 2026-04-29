@@ -375,6 +375,36 @@ export async function handleReportar(to: string, userId: string, userName: strin
 
 type RecentMsg = { content: unknown; direction: string | null; created_at: string | null }
 
+/**
+ * Format the JSON content stored in messages.content into a human-readable line.
+ * Known shapes:
+ *   text         → { body: string }
+ *   image/audio  → { media_id: string, mime_type: string }
+ *   interactive  → { interactive_type, button_id, button_title }
+ */
+function formatRecentMsgContent(content: unknown): string {
+  if (typeof content === 'string') return content.slice(0, 200)
+  if (!content || typeof content !== 'object') return ''
+
+  const c = content as Record<string, unknown>
+
+  if (typeof c.body === 'string' && c.body.trim()) {
+    return c.body.slice(0, 200)
+  }
+  if (typeof c.button_title === 'string' && c.button_title.trim()) {
+    return `[botão] ${c.button_title}`
+  }
+  if (typeof c.button_id === 'string' && c.button_id.trim()) {
+    return `[botão] ${c.button_id}`
+  }
+  if (typeof c.mime_type === 'string') {
+    if (c.mime_type.startsWith('image/')) return '[foto]'
+    if (c.mime_type.startsWith('audio/')) return '[áudio]'
+    return `[mídia ${c.mime_type}]`
+  }
+  return JSON.stringify(content).slice(0, 200)
+}
+
 async function notifySupportOfBugReport(args: {
   from: string
   userName: string | null
@@ -393,8 +423,8 @@ async function notifySupportOfBugReport(args: {
     lines.push('Últimas mensagens:')
     for (const msg of [...args.recentMsgs].reverse()) {
       const arrow = msg.direction === 'outbound' ? '←' : '→'
-      const raw = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? '')
-      lines.push(`${arrow} ${raw.slice(0, 200)}`)
+      const formatted = formatRecentMsgContent(msg.content)
+      lines.push(`${arrow} ${formatted}`)
     }
   } else {
     lines.push('(sem histórico recente de mensagens)')

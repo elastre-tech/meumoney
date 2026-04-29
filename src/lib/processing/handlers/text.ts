@@ -45,23 +45,32 @@ const CARTAO_INQUIRY_PHRASES = new Set<string>([
   'o cartao',
 ])
 
-// Frases já normalizadas (lowercase + sem acentos) — normalizeText remove acentos.
-const GREETING_PHRASES = new Set<string>([
-  'oi', 'oie', 'oii', 'oiii', 'ola', 'ole',
-  'bom dia', 'boa tarde', 'boa noite',
-  'tudo bem', 'tudo bom', 'tudo certo', 'tudo joia',
-  'e ai', 'eai', 'salve', 'opa', 'opaa',
-  'hi', 'hello', 'hey',
-])
+// Padrões já considerando que normalizeText remove acentos e baixa caixa.
+// "Aberturas" são as saudações cabeça (oi, ola, bom dia...).
+// "Extensões" são complementos tipo "tudo bem", "tudo joia".
+const GREETING_OPENER = '(?:oi+e?|ol[ae]|opa+|hi+|hello|hey|salve|e ai|eai|bom dia|boa tarde|boa noite)'
+const GREETING_EXTENSION = '(?:tudo bem|tudo bom|tudo certo|tudo joia|td bem|td bom)'
+// Aceita: "oi", "oi tudo bem", "tudo bem" sozinho. Permite vírgula/exclamação
+// entre as partes e pontuação no fim. Anchored.
+const GREETING_RE = new RegExp(
+  `^(?:${GREETING_OPENER}(?:[\\s,!.?]+${GREETING_EXTENSION})?|${GREETING_EXTENSION})[!.?]*$`
+)
+// Verbos transacionais — se aparecem, não é só saudação, é registro.
+const TRANSACTION_VERBS_RE = /\b(?:gastei|paguei|comprei|pago|recebi|ganhei|entrou|caiu|tirei|saiu)\b/
 
 /**
- * Detect a generic greeting that has no transactional content. Match must be
- * EXACT against the normalized text — "oi tudo bem" or "oi gastei 50" don't match.
+ * Detect a generic greeting that has no transactional content.
+ * Returns 'with_question' when the user appended "tudo bem"/etc (so the response can
+ * acknowledge the question), 'simple' for plain greetings, or null when not a greeting.
+ * Rejects messages with digits or transaction verbs ("oi gastei 50" → null).
  */
-export function detectGreeting(text: string): boolean {
+export function detectGreeting(text: string): 'simple' | 'with_question' | null {
   const normalized = normalizeText(text).trim()
-  if (!normalized) return false
-  return GREETING_PHRASES.has(normalized)
+  if (!normalized) return null
+  if (/\d/.test(normalized)) return null
+  if (TRANSACTION_VERBS_RE.test(normalized)) return null
+  if (!GREETING_RE.test(normalized)) return null
+  return /tudo (?:bem|bom|certo|joia)|td (?:bem|bom)/.test(normalized) ? 'with_question' : 'simple'
 }
 
 /**
@@ -240,10 +249,14 @@ export async function handleText(
     return
   }
 
-  if (detectGreeting(text)) {
+  const greetingKind = detectGreeting(text)
+  if (greetingKind) {
     const hi = userName ? `Oi, ${userName}! 👋` : 'Oi! 👋'
+    const opener = greetingKind === 'with_question'
+      ? `${hi} Tudo ótimo por aqui, pronto pra te ajudar a registrar.`
+      : hi
     await sendWhatsAppMessage(message.from,
-      `${hi} Pra registrar, manda algo tipo "gastei 45 no mercado" ou "recebi 3500 de salário". Manda *ajuda* pra ver tudo que dá pra fazer.`)
+      `${opener} Manda algo tipo "gastei 45 no mercado" ou "recebi 3500 de salário". Ou *ajuda* pra ver tudo que dá pra fazer.`)
     return
   }
 
