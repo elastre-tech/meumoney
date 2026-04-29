@@ -217,7 +217,7 @@ export async function handleText(
   }
   if (cartaoInquiry === 'fatura') {
     await sendWhatsAppMessage(message.from,
-      "💳 Como você prefere registrar?\n\n• Item por item: \"gastei 50 no mercado\"\n• A fatura inteira: \"paguei 1500 de fatura\"\n\nSó me manda o jeito que faz mais sentido pra você!")
+      "💳 Pra registrar a fatura, me manda o valor assim: \"paguei 1500 de fatura\". Se preferir item por item, manda cada um: \"gastei 50 no mercado\".")
     return
   }
 
