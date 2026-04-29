@@ -6,7 +6,8 @@ import { formatCurrency } from '@/lib/utils/format'
 import { maskId } from './utils'
 
 export async function handleAjuda(to: string): Promise<void> {
-  await sendWhatsAppMessage(to, helpMessage(process.env.NEXT_PUBLIC_APP_URL))
+  await sendWhatsAppMessage(to,
+    helpMessage(process.env.NEXT_PUBLIC_APP_URL, process.env.NEXT_PUBLIC_TUTORIAL_URL))
 }
 
 export async function handleDashboard(to: string): Promise<void> {

@@ -73,6 +73,57 @@ export function detectGreeting(text: string): 'simple' | 'with_question' | null 
   return /tudo (?:bem|bom|certo|joia)|td (?:bem|bom)/.test(normalized) ? 'with_question' : 'simple'
 }
 
+const HELP_INQUIRY_PHRASES = new Set<string>([
+  'duvida', 'duvidas', 'tutorial', 'tutoriais',
+  'como funciona', 'como usar', 'como uso',
+])
+
+const ERROR_INQUIRY_PHRASES = new Set<string>([
+  'erro',
+  'deu erro',
+  'da erro',
+  'esta dando erro',
+  'estou com erro',
+  'to com erro',
+  'estou com problema',
+  'to com problema',
+  'tem problema',
+  'nao funciona',
+  'nao ta funcionando',
+  'nao esta funcionando',
+])
+
+/**
+ * Detect a generic help inquiry (e.g. "duvida", "tutorial", "como funciona").
+ * Match must be EXACT — these route to handleAjuda.
+ */
+export function detectHelpInquiry(text: string): boolean {
+  const normalized = normalizeText(text).trim()
+  if (!normalized) return false
+  return HELP_INQUIRY_PHRASES.has(normalized)
+}
+
+/**
+ * Detect when user is reporting that something doesn't work without using the
+ * formal "reportar"/"bug"/"problema" command. Used to surface the tutorial link
+ * + suggest the formal report flow.
+ */
+export function detectErrorInquiry(text: string): boolean {
+  const normalized = normalizeText(text).trim()
+  if (!normalized) return false
+  return ERROR_INQUIRY_PHRASES.has(normalized)
+}
+
+/**
+ * Append the tutorial URL line to a message body, if NEXT_PUBLIC_TUTORIAL_URL is set.
+ * Returns the original text unchanged when the env var is missing.
+ */
+function withTutorialHint(body: string): string {
+  const url = process.env.NEXT_PUBLIC_TUTORIAL_URL
+  if (!url) return body
+  return `${body}\n\n📚 Tem dúvida? Confere o tutorial: ${url}`
+}
+
 /**
  * Detect generic inquiries about cartão/fatura with no transactional context
  * (no value, no description). Match must be EXACT against the normalized text —
@@ -249,6 +300,19 @@ export async function handleText(
     return
   }
 
+  if (detectHelpInquiry(text)) {
+    await handleAjuda(message.from)
+    return
+  }
+
+  if (detectErrorInquiry(text)) {
+    const body = userName
+      ? `Que pena, ${userName}! 😕 Confere o tutorial pra ver se é algo que dá pra resolver. Se for um problema mesmo do bot, manda *reportar* que eu registro pra equipe.`
+      : `Que pena! 😕 Confere o tutorial pra ver se é algo que dá pra resolver. Se for um problema mesmo do bot, manda *reportar* que eu registro pra equipe.`
+    await sendWhatsAppMessage(message.from, withTutorialHint(body))
+    return
+  }
+
   const greetingKind = detectGreeting(text)
   if (greetingKind) {
     const hi = userName ? `Oi, ${userName}! 👋` : 'Oi! 👋'
@@ -328,7 +392,7 @@ export async function handleText(
     }
   }
 
-  const sentError = await sendWhatsAppMessage(message.from, ERROR_MESSAGES.PARSE_FAILED)
+  const sentError = await sendWhatsAppMessage(message.from, withTutorialHint(ERROR_MESSAGES.PARSE_FAILED))
   if (!sentError) {
     console.error(`[FALHA ENVIO] Mensagem de erro não entregue para ${maskId(message.from)}`)
   }

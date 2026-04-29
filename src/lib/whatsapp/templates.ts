@@ -177,10 +177,13 @@ export function onboardingAcceptedMessage(name: string): string {
   ].join('\n')
 }
 
-export function helpMessage(appUrl?: string | null): string {
+export function helpMessage(appUrl?: string | null, tutorialUrl?: string | null): string {
   const url = appUrl ?? DEFAULT_APP_URL
   const dashboardLine = `🖥️ *conta* (ou *dashboard*/*painel*) — acesse em ${url}`
-  return [
+  const tutorialLine = tutorialUrl
+    ? `📚 *tutorial* (ou *dúvida*) — guia completo em ${tutorialUrl}`
+    : null
+  const lines: (string | null)[] = [
     `📋 *Comandos do MeuMoney:*`,
     '',
     '*Registrar transações:*',
@@ -203,7 +206,9 @@ export function helpMessage(appUrl?: string | null): string {
     `🗑️ *excluir meus dados* — apagar tudo (LGPD)`,
     '',
     dashboardLine,
-  ].join('\n')
+    tutorialLine,
+  ]
+  return lines.filter((l): l is string => l !== null).join('\n')
 }
 
 export function dashboardLinkMessage(appUrl?: string | null): string {
