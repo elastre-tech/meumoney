@@ -63,7 +63,8 @@ export async function saveAndConfirmTransaction(
     data.category,
     transactionDate,
     isToday,
-    userName
+    userName,
+    data.source
   )
   const sentConfirm = await sendInteractiveButtons(to, confirmation, [
     { id: 'edit_transaction', title: 'Editar' },

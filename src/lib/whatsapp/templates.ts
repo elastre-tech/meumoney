@@ -9,13 +9,17 @@ export function confirmationMessage(
   category: string,
   date: string | Date,
   isToday = true,
-  userName: string | null = null
+  userName: string | null = null,
+  source: 'text' | 'image' | 'audio' = 'text'
 ): string {
   const greeting = type === 'income'
     ? (userName ? `Boa, ${userName}!` : 'Boa!')
     : (userName ? `Anotado, ${userName}!` : 'Anotado!')
   const kind = type === 'expense' ? 'Despesa' : 'Receita'
   const dateStr = isToday ? 'Hoje' : formatDate(date)
+  const footer = source === 'audio'
+    ? '⚠️ Confira os valores — transcrições de áudio podem ter erros. Se algo estiver errado, toque em um botão abaixo.'
+    : 'Errou algo? Toque em um botão abaixo.'
   return [
     greeting,
     '',
@@ -25,7 +29,7 @@ export function confirmationMessage(
     `📁 Categoria: ${category}`,
     `📝 Descrição: ${description}`,
     '',
-    'Errou algo? Toque em um botão abaixo.',
+    footer,
   ].join('\n')
 }
 
@@ -52,7 +56,7 @@ export function ocrConfirmationMessage(
     `📁 Categoria: ${category}`,
     `🛒 Itens: ${itemsStr}`,
     '',
-    'Errou algo? Toque em um botão abaixo.',
+    '⚠️ Confira os valores — fotos de recibo podem ter erros de leitura. Se algo estiver errado, toque em um botão abaixo.',
   ].join('\n')
 }
 
@@ -72,7 +76,7 @@ export function batchConfirmationMessage(
     `✅ Salvei ${items.length} transações (total ${formatCurrency(total)}):`,
     ...lines,
     '',
-    'Errou algo? Toque em um botão abaixo.',
+    '⚠️ Confira os valores — fotos de recibo podem ter erros de leitura. Se algo estiver errado, toque em um botão abaixo.',
   ].join('\n')
 }
 
@@ -94,7 +98,7 @@ export function batchSummaryMessage(
     `✅ Salvei ${count} transações, total ${formatCurrency(total)}.`,
     `🏆 Top categorias: ${top}`,
     '',
-    'Errou algo? Toque em um botão abaixo.',
+    '⚠️ Confira os valores — fotos de recibo podem ter erros de leitura. Se algo estiver errado, toque em um botão abaixo.',
   ].join('\n')
 }
 
