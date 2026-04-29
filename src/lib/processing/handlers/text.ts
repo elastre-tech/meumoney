@@ -5,6 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp/send-message'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { classifyMessage } from '@/lib/ai/classify'
 import { ERROR_MESSAGES } from '@/lib/utils/constants'
+import { normalizeText } from '@/lib/utils/categories'
 import { maskId, saveAndConfirmTransaction } from './utils'
 import {
   handleAjuda,
@@ -21,6 +22,41 @@ import {
 } from './commands'
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const FATURA_INQUIRY_PHRASES = new Set<string>([
+  'fatura',
+  'fatura do cartao',
+  'fatura cartao',
+  'fatura do cartao de credito',
+  'paguei a fatura',
+  'paguei fatura',
+  'paguei a fatura do cartao',
+  'paguei fatura do cartao',
+  'paguei a fatura do cartao de credito',
+  'paguei fatura do cartao de credito',
+  'minha fatura',
+])
+
+const CARTAO_INQUIRY_PHRASES = new Set<string>([
+  'cartao',
+  'cartao de credito',
+  'meu cartao',
+  'meu cartao de credito',
+  'o cartao',
+])
+
+/**
+ * Detect generic inquiries about cartão/fatura with no transactional context
+ * (no value, no description). Match must be EXACT against the normalized text —
+ * substrings like "gastei 50 no cartão" or "cartão de débito" do not match.
+ */
+export function detectCartaoFaturaInquiry(text: string): 'cartao' | 'fatura' | null {
+  const normalized = normalizeText(text).trim()
+  if (!normalized) return null
+  if (FATURA_INQUIRY_PHRASES.has(normalized)) return 'fatura'
+  if (CARTAO_INQUIRY_PHRASES.has(normalized)) return 'cartao'
+  return null
+}
 
 function isLastBatchPending(p: unknown): p is { kind: 'last_batch'; ids: string[] } {
   return !!p
@@ -170,6 +206,18 @@ export async function handleText(
 
   if (lower === 'confirmar exclusao' || lower === 'confirmar exclusão') {
     await handleExcluirDados(message.from, userId)
+    return
+  }
+
+  const cartaoInquiry = detectCartaoFaturaInquiry(text)
+  if (cartaoInquiry === 'cartao') {
+    await sendWhatsAppMessage(message.from,
+      "💳 Pra registrar uma despesa do cartão, me diz o que foi e o valor! Exemplo: \"gastei 150 no mercado no cartão\" ou \"paguei 80 de uber no cartão\"")
+    return
+  }
+  if (cartaoInquiry === 'fatura') {
+    await sendWhatsAppMessage(message.from,
+      "💳 Pagamento de fatura de cartão não é uma despesa nova — as despesas já foram registradas quando você gastou. Se quiser registrar algo específico do cartão, me diz o que foi!")
     return
   }
 
