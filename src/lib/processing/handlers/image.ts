@@ -15,6 +15,7 @@ import { maskId, buildActionButtonId } from './utils'
 
 interface ResolvedTransaction {
   amount: number
+  establishment: string | null
   description: string
   type: 'expense' | 'income'
   categoryId: string | null
@@ -111,7 +112,8 @@ export async function handleImage(
     const { categoryId, categoryName, type } = await resolveCategory(tx, categoryList)
     resolved.push({
       amount: tx.amount,
-      description: tx.establishment ?? tx.description,
+      establishment: tx.establishment,
+      description: tx.description,
       type,
       categoryId,
       categoryName,
@@ -123,7 +125,7 @@ export async function handleImage(
     user_id: userId,
     type: r.type,
     amount: r.amount,
-    description: r.description,
+    description: r.establishment ?? r.description,
     category_id: r.categoryId,
     source: 'image' as const,
     date: r.date,
@@ -150,15 +152,19 @@ export async function handleImage(
     const r = resolved[0]
     body = ocrConfirmationMessage(
       r.amount,
+      r.establishment,
       r.description,
       r.categoryName,
       r.date,
-      [r.description],
       userName
     )
   } else if (count <= 5) {
     body = batchConfirmationMessage(
-      resolved.map((r) => ({ amount: r.amount, category: r.categoryName, description: r.description })),
+      resolved.map((r) => ({
+        amount: r.amount,
+        category: r.categoryName,
+        description: r.establishment ?? r.description,
+      })),
       userName
     )
   } else {

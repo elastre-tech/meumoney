@@ -67,7 +67,7 @@ Regras dos campos:
   • "2 milhões" → 2000000
 - amount_text: copie o trecho EXATO do valor como aparece na imagem (ex: "10 mil", "R$ 1.234,56", "5mil"). null se não conseguir identificar o trecho.
 - description: descrição curta do item, linha ou compra. Texto extraído da imagem, sem comentários.
-- establishment: nome real do estabelecimento exatamente como aparece na imagem (ex: "Supermercado Pão de Açúcar", "Posto Shell"). null se não houver.
+- establishment: o nome EXATO do estabelecimento como impresso no recibo (razão social ou nome fantasia, ex: "Supermercado Pão de Açúcar", "Posto Shell Ibirapuera", "Drogaria São Paulo"). NUNCA retorne palavras genéricas como "Supermercado", "Loja", "Estabelecimento", "Comércio", "Mercado", "Padaria" sozinhas — essas são tipos, não nomes. Se não conseguir ler o nome real impresso, retorne null.
 - category_hint: OBRIGATÓRIO. Use APENAS uma das categorias listadas acima, sem parênteses, sem explicação.
 - date: formato yyyy-mm-dd. Datas ambíguas em dd/mm (padrão Brasil). null se não houver data.
 - source_type: classifique a imagem.

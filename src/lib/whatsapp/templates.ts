@@ -33,31 +33,61 @@ export function confirmationMessage(
   ].join('\n')
 }
 
+const GENERIC_ESTABLISHMENT_NAMES: ReadonlySet<string> = new Set([
+  'estabelecimento',
+  'supermercado',
+  'mercado',
+  'loja',
+  'comercio',
+  'padaria',
+  'farmacia',
+  'restaurante',
+  'lanchonete',
+])
+
+function isGenericEstablishment(value: string): boolean {
+  const normalized = value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+  if (!normalized) return true
+  if (normalized.includes('/')) return true
+  if (normalized.includes('estabelecimento')) return true
+  return GENERIC_ESTABLISHMENT_NAMES.has(normalized)
+}
+
 export function ocrConfirmationMessage(
   amount: number,
-  establishment: string,
+  establishment: string | null,
+  description: string,
   category: string,
   date: string | Date,
-  items: string[],
   userName: string | null = null
 ): string {
   const greeting = userName ? `Anotado, ${userName}!` : 'Anotado!'
-  const itemsStr = items.length > 0 ? items.slice(0, 3).join(', ') : '—'
   const today = new Date().toISOString().split('T')[0]
   const dateVal = typeof date === 'string' ? date : date.toISOString().split('T')[0]
   const dateStr = dateVal === today ? 'Hoje' : formatDate(date)
-  return [
+  const showEstablishment =
+    establishment !== null && !isGenericEstablishment(establishment)
+  const lines: string[] = [
     `📸 ${greeting}`,
     '',
     `✅ Despesa salva:`,
     `💰 Valor: ${formatCurrency(amount)}`,
     `📅 Data: ${dateStr}`,
-    `🏪 Estabelecimento: ${establishment}`,
-    `📁 Categoria: ${category}`,
-    `🛒 Itens: ${itemsStr}`,
-    '',
-    '⚠️ Confira os valores — fotos de recibo podem ter erros de leitura. Se algo estiver errado, toque em um botão abaixo.',
-  ].join('\n')
+  ]
+  if (showEstablishment) {
+    lines.push(`🏪 Estabelecimento: ${establishment}`)
+  }
+  lines.push(`📁 Categoria: ${category}`)
+  lines.push(`📝 Descrição: ${description}`)
+  lines.push('')
+  lines.push(
+    '⚠️ Confira os valores — fotos de recibo podem ter erros de leitura. Se algo estiver errado, toque em um botão abaixo.'
+  )
+  return lines.join('\n')
 }
 
 export function batchConfirmationMessage(
