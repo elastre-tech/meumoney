@@ -233,11 +233,17 @@ export async function handleText(
     return
   }
 
-  // Pending bug report? A próxima mensagem que NÃO for comando vira detalhe do report.
+  // Pending bug report? A próxima mensagem que NÃO for comando/saudação/transação vira detalhe.
+  // Tudo que tem intenção clara (transação, saudação, comando) limpa o pending e segue o fluxo normal —
+  // evita capturar acidentalmente "gastei 50 no mercado" como detalhe de bug.
   if (isPendingReport(pendingTransaction)) {
-    if (PENDING_REPORT_SKIP_COMMANDS.has(lower)) {
-      // Usuária mudou de assunto — limpa pending e deixa o handler do comando agir.
+    const isCommand = PENDING_REPORT_SKIP_COMMANDS.has(lower)
+    const isGreetingMsg = detectGreeting(text) !== null
+    const looksLikeTransaction = parseTextMessage(text) !== null
+
+    if (isCommand || isGreetingMsg || looksLikeTransaction) {
       await supabase.from('users').update({ pending_transaction: null }).eq('id', userId)
+      // segue o fluxo normal abaixo
     } else {
       await handleBugReportDetail(message.from, userId, userName, text, pendingTransaction.report_id)
       return
