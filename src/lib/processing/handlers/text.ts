@@ -217,7 +217,7 @@ export async function handleText(
   }
   if (cartaoInquiry === 'fatura') {
     await sendWhatsAppMessage(message.from,
-      "💳 Pagamento de fatura de cartão não é uma despesa nova — as despesas já foram registradas quando você gastou. Se quiser registrar algo específico do cartão, me diz o que foi!")
+      "💳 Como você prefere registrar?\n\n• Item por item: \"gastei 50 no mercado\"\n• A fatura inteira: \"paguei 1500 de fatura\"\n\nSó me manda o jeito que faz mais sentido pra você!")
     return
   }
 
