@@ -364,9 +364,44 @@ export async function handleReportar(to: string, userId: string, userName: strin
     },
   })
 
+  await notifySupportOfBugReport({ from: to, userName, recentMsgs: recentMsgs ?? [] })
+
   const sent = await sendWhatsAppMessage(to,
     `🐛 Problema registrado! Nossa equipe vai analisar. Se quiser detalhar, mande a próxima mensagem descrevendo o que houve.`)
   if (!sent) {
     console.error(`[FALHA ENVIO] Confirmação de report não entregue para ${maskId(to)}`)
+  }
+}
+
+type RecentMsg = { content: unknown; direction: string | null; created_at: string | null }
+
+async function notifySupportOfBugReport(args: {
+  from: string
+  userName: string | null
+  recentMsgs: RecentMsg[]
+}): Promise<void> {
+  const notifyTo = process.env.BUG_REPORT_NOTIFY_TO
+  if (!notifyTo) {
+    console.warn('[BUG REPORT] BUG_REPORT_NOTIFY_TO não configurado — notificação ao suporte não enviada')
+    return
+  }
+
+  const who = args.userName ? `${args.userName} (${args.from})` : args.from
+  const lines = ['🐛 Novo bug report no MeuMoney', '', `De: ${who}`, '']
+
+  if (args.recentMsgs.length > 0) {
+    lines.push('Últimas mensagens:')
+    for (const msg of [...args.recentMsgs].reverse()) {
+      const arrow = msg.direction === 'outbound' ? '←' : '→'
+      const raw = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? '')
+      lines.push(`${arrow} ${raw.slice(0, 200)}`)
+    }
+  } else {
+    lines.push('(sem histórico recente de mensagens)')
+  }
+
+  const sent = await sendWhatsAppMessage(notifyTo, lines.join('\n'))
+  if (!sent) {
+    console.error(`[BUG REPORT] Falha ao notificar suporte ${maskId(notifyTo)} — ver tabela reports`)
   }
 }
