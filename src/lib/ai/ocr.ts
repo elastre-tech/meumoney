@@ -40,35 +40,42 @@ Tipos possíveis:
 Categorias permitidas (use APENAS uma destas em category_hint):
 ${ALLOWED_CATEGORIES.join(', ')}
 
-Responda APENAS em JSON neste formato:
+Responda APENAS em JSON neste formato exato (NÃO copie nenhum texto deste bloco como valor — preencha cada campo com o dado real extraído da imagem):
 {
   "transactions": [
     {
-      "amount": number (em reais, ex: 45.90),
-      "amount_text": "trecho exato do valor como aparece na imagem, ou null",
-      "description": "string curta do item ou linha",
-      "establishment": "string ou null",
-      "category_hint": "uma das categorias acima",
-      "date": "yyyy-mm-dd ou null"
+      "amount": number,
+      "amount_text": string | null,
+      "description": string,
+      "establishment": string | null,
+      "category_hint": string,
+      "date": string | null
     }
   ],
   "source_type": "receipt" | "spreadsheet" | "bank_statement" | "other",
   "confidence": 0.0-1.0
 }
 
-Regras:
-- amount sempre em número (45.90, NUNCA "R$ 45,90")
-- Valores escritos com "mil", "milhão" ou "milhões" DEVEM ser convertidos para o número total. Exemplos:
-  • "10 mil" → amount: 10000
-  • "5mil" → amount: 5000
-  • "1,5 mil" → amount: 1500
-  • "duzentos mil" → amount: 200000
-  • "2 milhões" → amount: 2000000
-- amount_text: copie o trecho EXATO do valor como aparece na imagem (ex: "10 mil", "R$ 1.234,56", "5mil"). Use null se não conseguir identificar o trecho.
-- Datas ambíguas: assumir formato dd/mm (Brasil) e converter para yyyy-mm-dd
-- category_hint OBRIGATÓRIO e DEVE ser uma das categorias listadas
+Regras dos campos:
+- amount: número em reais (ex: 45.90). NUNCA string como "R$ 45,90".
+- amount: em nota fiscal/cupom, use SEMPRE o VALOR TOTAL FINAL da nota (última linha de "TOTAL" / "VALOR A PAGAR" / "TOTAL R$"). NÃO use subtotais, somatórios parciais, descontos, troco, nem o valor de itens individuais.
+- amount: valores escritos com "mil"/"milhão"/"milhões" DEVEM ser convertidos para o número total:
+  • "10 mil" → 10000
+  • "5mil" → 5000
+  • "1,5 mil" → 1500
+  • "duzentos mil" → 200000
+  • "2 milhões" → 2000000
+- amount_text: copie o trecho EXATO do valor como aparece na imagem (ex: "10 mil", "R$ 1.234,56", "5mil"). null se não conseguir identificar o trecho.
+- description: descrição curta do item, linha ou compra. Texto extraído da imagem, sem comentários.
+- establishment: nome real do estabelecimento exatamente como aparece na imagem (ex: "Supermercado Pão de Açúcar", "Posto Shell"). null se não houver.
+- category_hint: OBRIGATÓRIO. Use APENAS uma das categorias listadas acima, sem parênteses, sem explicação.
+- date: formato yyyy-mm-dd. Datas ambíguas em dd/mm (padrão Brasil). null se não houver data.
+- source_type: classifique a imagem.
+- confidence: sua confiança na extração entre 0.0 e 1.0.
+
+Casos especiais:
 - Imagem ilegível ou sem transações: { "transactions": [], "source_type": "other", "confidence": 0, "error": "image_too_dense" }
-- Receitas (entradas): use categorias income (Salário, Freelance, Investimentos, Vendas, Comissão)`
+- Receitas (entradas de dinheiro): use categorias income (Salário, Freelance, Investimentos, Vendas, Comissão).`
 
 // Hundreds written by extenso (cento/duzentos/...) used in patterns like "duzentos mil".
 const EXTENSO_HUNDREDS: Record<string, number> = {
