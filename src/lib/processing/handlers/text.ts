@@ -168,6 +168,16 @@ const PENDING_REPORT_SKIP_COMMANDS = new Set<string>([
   'confirmar exclusao', 'confirmar exclusão',
 ])
 
+// Frases que dizem explicitamente "não quero detalhar". Limpa pending e responde
+// confirmando, sem notificar o suporte com detalhe vazio.
+const PENDING_REPORT_DECLINE_PHRASES = new Set<string>([
+  'nao quero detalhar', 'nao quero', 'nao quero falar',
+  'nao precisa', 'nao precisa nao',
+  'deixa pra la', 'deixa quieto', 'deixa',
+  'esquece', 'esqueca',
+  'nada', 'sem detalhe', 'sem detalhes',
+])
+
 /**
  * Resolve the transaction ids encoded in a button payload.
  * - "_pending" → read pending_transaction last_batch and clear it.
@@ -233,17 +243,25 @@ export async function handleText(
     return
   }
 
-  // Pending bug report? A próxima mensagem que NÃO for comando/saudação/transação vira detalhe.
-  // Tudo que tem intenção clara (transação, saudação, comando) limpa o pending e segue o fluxo normal —
-  // evita capturar acidentalmente "gastei 50 no mercado" como detalhe de bug.
+  // Pending bug report? A próxima mensagem que NÃO for comando/saudação/transação/recusa vira detalhe.
   if (isPendingReport(pendingTransaction)) {
+    const normalizedText = normalizeText(text).trim()
+    const isDecline = PENDING_REPORT_DECLINE_PHRASES.has(normalizedText)
     const isCommand = PENDING_REPORT_SKIP_COMMANDS.has(lower)
     const isGreetingMsg = detectGreeting(text) !== null
     const looksLikeTransaction = parseTextMessage(text) !== null
 
-    if (isCommand || isGreetingMsg || looksLikeTransaction) {
+    if (isDecline) {
+      // Usuária explicitamente não quer detalhar — limpa pending sem notificar suporte com detalhe vazio.
       await supabase.from('users').update({ pending_transaction: null }).eq('id', userId)
-      // segue o fluxo normal abaixo
+      await sendWhatsAppMessage(message.from,
+        'Beleza, sem stress! 👍 Pode seguir com seus registros normalmente.')
+      return
+    }
+
+    if (isCommand || isGreetingMsg || looksLikeTransaction) {
+      // Intenção clara (transação/saudação/comando) → limpa pending e segue fluxo normal abaixo.
+      await supabase.from('users').update({ pending_transaction: null }).eq('id', userId)
     } else {
       await handleBugReportDetail(message.from, userId, userName, text, pendingTransaction.report_id)
       return

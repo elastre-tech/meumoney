@@ -386,7 +386,7 @@ export async function handleReportar(to: string, userId: string, userName: strin
   await notifySupportOfBugReport({ from: to, userName, recentMsgs: recentMsgs ?? [] })
 
   const sent = await sendWhatsAppMessage(to,
-    `🐛 Problema registrado! Nossa equipe vai analisar. Se quiser detalhar, mande a próxima mensagem descrevendo o que houve.`)
+    `🐛 Problema registrado! Nossa equipe vai analisar.\n\nSe quiser detalhar, mande a próxima mensagem descrevendo o que houve. Detalhar é opcional — se não quiser, é só seguir com seus registros normalmente.`)
   if (!sent) {
     console.error(`[FALHA ENVIO] Confirmação de report não entregue para ${maskId(to)}`)
   }
